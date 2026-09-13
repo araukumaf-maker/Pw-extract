@@ -143,11 +143,16 @@ function requireToken(req: Request, res: Response): string | null {
 
 function remoteList(body: unknown): JsonRecord[] {
   const root = asRecord(body);
+  const nestedData = asRecord(root.data).data;
   const list = Array.isArray(root.data)
     ? root.data
-    : Array.isArray(body)
-      ? body
-      : [];
+    : Array.isArray(nestedData)
+      ? nestedData
+      : Array.isArray(root.items)
+        ? root.items
+        : Array.isArray(body)
+          ? body
+          : [];
   return list.map(asRecord);
 }
 
@@ -158,15 +163,21 @@ function resourceGroups(body: unknown) {
   }> = [];
 
   for (const entry of remoteList(body)) {
+    const nestedEntry = asRecord(entry.data);
     const homework = Array.isArray(entry.homeworkIds)
       ? entry.homeworkIds
-      : [];
+      : Array.isArray(nestedEntry.homeworkIds)
+        ? nestedEntry.homeworkIds
+        : [];
     for (const item of homework.map(asRecord)) {
       const attachments = Array.isArray(item.attachmentIds)
         ? item.attachmentIds
         : [];
       groups.push({
-        topic: asNullableString(item.topic),
+        topic:
+          asNullableString(item.topic) ??
+          asNullableString(nestedEntry.topic) ??
+          asNullableString(entry.topic),
         attachments: attachments.map((attachment) => {
           const file = asRecord(attachment);
           const baseUrl = asString(file.baseUrl).replace(/\/+$/, "");
@@ -356,7 +367,7 @@ router.get("/pw/batches/:batchSlug/subjects/:subjectSlug/topics", async (req, re
     return;
   }
   const response = await pwRequest(
-    `/v2/batches/${encodeURIComponent(params.data.batchSlug)}/subject/${encodeURIComponent(params.data.subjectSlug)}/topics?page=1`,
+    `/batch-service/v1/batch-tags/${encodeURIComponent(params.data.batchSlug)}/topics?batchSubjectIds=${encodeURIComponent(params.data.subjectSlug)}`,
     {},
     token,
   );
@@ -378,10 +389,10 @@ router.get("/pw/batches/:batchSlug/subjects/:subjectSlug/topics", async (req, re
 async function listResources(
   req: Request,
   res: Response,
-  contentType: "notes" | "DppNotes",
+  contentType: "NOTES" | "DPP_PDF",
 ): Promise<void> {
   const parser =
-    contentType === "notes" ? ListPwNotesParams : ListPwDppParams;
+    contentType === "NOTES" ? ListPwNotesParams : ListPwDppParams;
   const parsed = parser.safeParse(req.params);
   const token = requireToken(req, res);
   if (!token) return;
@@ -391,7 +402,7 @@ async function listResources(
   }
   const { batchSlug, subjectSlug, topicSlug } = parsed.data;
   const response = await pwRequest(
-    `/v2/batches/${encodeURIComponent(batchSlug)}/subject/${encodeURIComponent(subjectSlug)}/contents?page=1&contentType=${contentType}&tag=${encodeURIComponent(topicSlug)}`,
+    `/batch-service/v3/batch-subject-schedules/${encodeURIComponent(batchSlug)}/subject/${encodeURIComponent(subjectSlug)}/contents?skip=0&limit=50&contentType=${contentType}&contentFilter=ALL&tagId=${encodeURIComponent(topicSlug)}`,
     {},
     token,
   );
@@ -401,7 +412,7 @@ async function listResources(
   }
   const groups = resourceGroups(response.body);
   res.json(
-    contentType === "notes"
+    contentType === "NOTES"
       ? ListPwNotesResponse.parse(groups)
       : ListPwDppResponse.parse(groups),
   );
@@ -409,11 +420,11 @@ async function listResources(
 
 router.get(
   "/pw/batches/:batchSlug/subjects/:subjectSlug/topics/:topicSlug/notes",
-  (req, res) => void listResources(req, res, "notes"),
+  (req, res) => void listResources(req, res, "NOTES"),
 );
 router.get(
   "/pw/batches/:batchSlug/subjects/:subjectSlug/topics/:topicSlug/dpp",
-  (req, res) => void listResources(req, res, "DppNotes"),
+  (req, res) => void listResources(req, res, "DPP_PDF"),
 );
 
 router.get("/pw/batches/:batchId/announcements", async (req, res) => {
