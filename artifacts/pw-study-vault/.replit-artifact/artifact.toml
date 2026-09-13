@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "PW Study Vault"
+description = "A focused study-material vault for PW students to sign in with their own account, browse enrolled batches, and quickly open or download notes, DPPs, and announcements."
+version = "1.0.0"
+id = "artifacts/pw-study-vault"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22025
+
+[services.development]
+run = "pnpm --filter @workspace/pw-study-vault run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pw-study-vault", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pw-study-vault/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22025"
+BASE_PATH = "/"

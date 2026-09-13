@@ -1,0 +1,400 @@
+openapi: 3.1.0
+info:
+  # Keep this title stable: the code generator uses it for fixed output paths.
+  title: Api
+  version: 0.1.0
+  description: PW Study Vault API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: pw
+    description: Legitimate access to the user's enrolled PW resources
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /pw/auth/verify:
+    post:
+      operationId: verifyPwToken
+      tags: [pw]
+      summary: Verify an existing PW session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PwTokenInput"
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PwAuthResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /pw/auth/otp:
+    post:
+      operationId: requestPwOtp
+      tags: [pw]
+      summary: Request a one-time password from PW
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PwOtpInput"
+      responses:
+        "200":
+          description: OTP request result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PwActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /pw/auth/token:
+    post:
+      operationId: exchangePwOtp
+      tags: [pw]
+      summary: Exchange a phone OTP for a PW session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PwOtpExchangeInput"
+      responses:
+        "200":
+          description: Token exchange result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PwTokenResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /pw/batches:
+    get:
+      operationId: listPwBatches
+      tags: [pw]
+      summary: List the user's purchased PW batches
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Enrolled batches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PwBatch"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /pw/batches/{batchSlug}/subjects:
+    get:
+      operationId: listPwSubjects
+      tags: [pw]
+      summary: List subjects in a batch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BatchSlug"
+      responses:
+        "200":
+          description: Subjects in the batch
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PwSubject"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /pw/batches/{batchSlug}/subjects/{subjectSlug}/topics:
+    get:
+      operationId: listPwTopics
+      tags: [pw]
+      summary: List topics in a subject
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BatchSlug"
+        - $ref: "#/components/parameters/SubjectSlug"
+      responses:
+        "200":
+          description: Topics in the subject
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PwTopic"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /pw/batches/{batchSlug}/subjects/{subjectSlug}/topics/{topicSlug}/notes:
+    get:
+      operationId: listPwNotes
+      tags: [pw]
+      summary: List notes for a topic
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BatchSlug"
+        - $ref: "#/components/parameters/SubjectSlug"
+        - $ref: "#/components/parameters/TopicSlug"
+      responses:
+        "200":
+          description: Notes and attachment links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PwResourceGroup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /pw/batches/{batchSlug}/subjects/{subjectSlug}/topics/{topicSlug}/dpp:
+    get:
+      operationId: listPwDpp
+      tags: [pw]
+      summary: List DPPs for a topic
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BatchSlug"
+        - $ref: "#/components/parameters/SubjectSlug"
+        - $ref: "#/components/parameters/TopicSlug"
+      responses:
+        "200":
+          description: DPPs and attachment links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PwResourceGroup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /pw/batches/{batchId}/announcements:
+    get:
+      operationId: listPwAnnouncements
+      tags: [pw]
+      summary: List announcements for a batch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Batch announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PwAnnouncement"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  parameters:
+    BatchSlug:
+      name: batchSlug
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    SubjectSlug:
+      name: subjectSlug
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    TopicSlug:
+      name: topicSlug
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PwActionResult"
+    Unauthorized:
+      description: Missing or invalid PW session token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PwActionResult"
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+    PwTokenInput:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 1
+      required: [token]
+    PwOtpInput:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 3
+        countryCode:
+          type: string
+          minLength: 1
+      required: [phone, countryCode]
+    PwOtpExchangeInput:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 3
+        otp:
+          type: string
+          minLength: 1
+      required: [phone, otp]
+    PwAuthResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        errorMessage:
+          type: ["string", "null"]
+      required: [valid]
+    PwActionResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errorMessage:
+          type: ["string", "null"]
+      required: [success]
+    PwTokenResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        accessToken:
+          type: ["string", "null"]
+        expiresIn:
+          type: ["integer", "null"]
+        errorMessage:
+          type: ["string", "null"]
+      required: [success]
+    PwBatch:
+      type: object
+      properties:
+        id:
+          type: ["string", "null"]
+        name:
+          type: string
+        slug:
+          type: string
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        expiryDate:
+          type: ["string", "null"]
+      required: [name, slug]
+    PwSubject:
+      type: object
+      properties:
+        id:
+          type: ["string", "null"]
+        name:
+          type: string
+        slug:
+          type: string
+        lectureCount:
+          type: ["integer", "null"]
+      required: [name, slug]
+    PwTopic:
+      type: object
+      properties:
+        id:
+          type: ["string", "null"]
+        name:
+          type: string
+        slug:
+          type: string
+      required: [name, slug]
+    PwAttachment:
+      type: object
+      properties:
+        id:
+          type: ["string", "null"]
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+      required: [name, url]
+    PwResourceGroup:
+      type: object
+      properties:
+        topic:
+          type: ["string", "null"]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PwAttachment"
+      required: [attachments]
+    PwAnnouncement:
+      type: object
+      properties:
+        id:
+          type: ["string", "null"]
+        announcement:
+          type: string
+        scheduleTime:
+          type: ["string", "null"]
+        attachment:
+          anyOf:
+            - $ref: "#/components/schemas/PwAttachment"
+            - type: "null"
+      required: [announcement, attachment]
