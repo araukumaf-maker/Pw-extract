@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Study Desk"
+description = "A mobile-first education hub inspired by the provided StudyPanda references, rebranded as Study Desk with quick access to learning communities, study resources, and a join-community prompt."
+version = "1.0.0"
+id = "artifacts/study-desk"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19610
+
+[services.development]
+run = "pnpm --filter @workspace/study-desk run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/study-desk", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/study-desk/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19610"
+BASE_PATH = "/"
