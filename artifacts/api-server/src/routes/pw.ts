@@ -61,11 +61,18 @@ function errorMessage(body: unknown, fallback: string): string {
   );
 }
 
-function authHeaders(token?: string): Record<string, string> {
+function authHeaders(token?: string, integrationWith = "Origin"): Record<string, string> {
   const headers: Record<string, string> = {
-    Accept: "application/json",
+    Accept: "application/json, text/plain, */*",
     "Content-Type": "application/json",
+    "Client-Id": ORGANIZATION_ID,
+    "Client-Type": "WEB",
+    "Client-Version": "2.6.15",
+    Origin: "https://www.pw.live",
     Referer: REFERER,
+    "Integration-With": integrationWith,
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9",
     Randomid: randomUUID(),
   };
   if (token) {
@@ -78,12 +85,13 @@ async function pwRequest(
   path: string,
   init: RequestInit = {},
   token?: string,
+  integrationWith = "Origin",
 ): Promise<PwResponse> {
   try {
     const response = await fetch(`${PW_API}${path}`, {
       ...init,
       headers: {
-        ...authHeaders(token),
+        ...authHeaders(token, integrationWith),
         ...(init.headers ?? {}),
       },
     });
@@ -223,17 +231,28 @@ router.post("/pw/auth/otp", async (req, res) => {
     return;
   }
 
-  const response = await pwRequest(
+  const payload = {
+    username: parsed.data.phone,
+    countryCode: parsed.data.countryCode,
+    organizationId: ORGANIZATION_ID,
+  };
+  let response = await pwRequest(
     "/v1/users/get-otp?smsType=0",
-    jsonBody({
-      username: parsed.data.phone,
-      countryCode: parsed.data.countryCode,
-      organizationId: ORGANIZATION_ID,
-    }),
+    jsonBody(payload),
   );
-  res.status(response.ok ? 200 : 502).json({
-    success: Boolean(asRecord(response.body).success && response.ok),
-    errorMessage: response.ok ? null : errorMessage(response.body, "Could not send OTP."),
+  // PW has used both SMS modes in production; retry with the current fallback
+  // when the first mode is rejected by the upstream service.
+  if (!response.ok) {
+    response = await pwRequest(
+      "/v1/users/get-otp?smsType=1",
+      jsonBody(payload),
+    );
+  }
+  const body = asRecord(response.body);
+  const success = response.ok && (body.success === undefined || Boolean(body.success));
+  res.status(success ? 200 : response.status >= 400 && response.status < 500 ? response.status : 502).json({
+    success,
+    errorMessage: success ? null : errorMessage(body, "Could not send OTP."),
   });
 });
 
@@ -256,14 +275,18 @@ router.post("/pw/auth/token", async (req, res) => {
       longitude: 0,
       organizationId: ORGANIZATION_ID,
     }),
+    undefined,
+    "",
   );
   const body = asRecord(response.body);
   const data = asRecord(body.data);
-  res.status(response.ok ? 200 : 502).json({
-    success: Boolean(response.ok && body.success && data.access_token),
-    accessToken: asNullableString(data.access_token),
+  const accessToken = asNullableString(data.access_token);
+  const success = response.ok && Boolean(accessToken);
+  res.status(success ? 200 : response.status >= 400 && response.status < 500 ? response.status : 502).json({
+    success,
+    accessToken,
     expiresIn: asNullableNumber(data.expires_in),
-    errorMessage: response.ok ? null : errorMessage(body, "Could not verify OTP."),
+    errorMessage: success ? null : errorMessage(body, "Could not verify OTP."),
   });
 });
 
